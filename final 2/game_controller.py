@@ -4,6 +4,9 @@ import math
 from config import WIDTH, HEIGHT
 from entities import Player, Enemy
 
+# -----------------------------
+# 1. Wave Manager (Spawning Logic)
+# -----------------------------
 class WaveManager:
     """적 스폰과 관련된 시간 및 웨이브 상태를 관리합니다."""
     def __init__(self):
@@ -52,7 +55,7 @@ class WaveManager:
                 pos = (WIDTH + margin, random.randint(80, HEIGHT - margin))
                 
             img = gs.img_spider if kind == "spider" else gs.img_skull
-            controller.enemies.append(Enemy(kind, pos, 100, 10, img))
+            controller.enemies.append(Enemy(kind, pos, 20, 10, img))
 
     def _spawn_boss(self, gs, controller, kind):
         """중간 보스 및 최종 보스를 생성합니다."""
@@ -73,6 +76,9 @@ class WaveManager:
         if is_mid: self.midboss_spawned = True
         else: self.finalboss_spawned = True
 
+# -----------------------------
+# 2. Game Controller
+# -----------------------------
 class GameController:
     """게임의 핵심 물리 엔진, 충돌 판정, 보상 시스템을 관리합니다."""
     def __init__(self, rm, player_config):
