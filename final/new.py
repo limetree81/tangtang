@@ -13,7 +13,8 @@ WIDTH, HEIGHT = 1280, 720
 FPS = 60
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-ASSET_DIR = os.path.join(BASE_DIR, "assets/")
+# assets 폴더는 실행 파일(또는 스크립트)과 같은 위치에 있다고 가정합니다.
+ASSET_DIR = os.path.join(BASE_DIR, "assets")
 
 WHITE = (245, 245, 245)
 BLACK = (12, 12, 15)
@@ -39,13 +40,13 @@ class ResourceManager:
         self.images = {}
 
     def get_image(self, name, size, color=(70, 70, 80)):
-        # name이 전체 경로인 경우 파일명만 추출하거나 그대로 사용
+        # name이 전체 경로이든 파일명이든 파일명만 추출
         file_name = os.path.basename(name)
         cache_key = f"{file_name}_{size}"
         if cache_key in self.images:
             return self.images[cache_key]
         
-        # 에셋 폴더 또는 직접 경로 확인
+        # 1. assets 폴더 내부 확인 2. 원래 전달된 경로 확인
         search_paths = [os.path.join(ASSET_DIR, file_name), name]
         for path in search_paths:
             if os.path.exists(path):
@@ -253,13 +254,16 @@ class StartScreen:
         self.mgr = mgr; self.rm = rm
         self.font_h1 = pygame.font.SysFont("malgungothic", 52); self.font_h2 = pygame.font.SysFont("malgungothic", 20); self.font = pygame.font.SysFont("malgungothic", 20); self.font_small = pygame.font.SysFont("malgungothic", 16)
         self.PLAYERS = [{"id": "tank", "name": "플레이어 1", "HP": 130, "VEL": 240, "DMG": 1.0}, {"id": "speed", "name": "플레이어 2", "HP": 100, "VEL": 290, "DMG": 1.0}, {"id": "damage", "name": "플레이어 3", "HP": 100, "VEL": 240, "DMG": 1.3}]
-        self.image_paths = [r"assets\player1.jpg", r"assets\player2.jpg", r"assets\player3.jpg"]
+        
+        # ✅ 절대 경로 삭제 및 assets 폴더 내부 파일명으로 수정
+        self.image_paths = ["player1.jpg", "player2.jpg", "player3.jpg"]
+        
         self.card_w, self.card_h, self.card_gap = 280, 390, 26
         total_w = self.card_w * 4 + self.card_gap * 3; self.start_x = (WIDTH - total_w) // 2; self.cards_y = 170
         self.card_rects = [pygame.Rect(self.start_x + i * (self.card_w + self.card_gap), self.cards_y, self.card_w, self.card_h) for i in range(3)]
         self.help_rect = pygame.Rect(self.start_x + 3 * (self.card_w + self.card_gap), self.cards_y, self.card_w, self.card_h)
         self.selected = 0
-        # ✅ ResourceManager 사용
+        # ✅ ResourceManager 사용 (내부적으로 assets/파일명 을 찾음)
         self.card_imgs = [self.rm.get_image(p, (self.card_w - 40, 190)) for p in self.image_paths]
         bx = (WIDTH - (420 * 2 + 60)) // 2; btn_y = self.cards_y + self.card_h + 40
         self.btn_quit = Button((bx, btn_y, 420, 70), "종료 (Esc)", RED, (180, 55, 55), self.font_h2)
@@ -307,14 +311,16 @@ class GameScreen:
         # ✅ GameController가 게임 데이터 로딩/관리 담당
         self.controller = GameController(rm, player_config)
         self.font_h = pygame.font.SysFont("malgungothic", 36); self.font = pygame.font.SysFont("malgungothic", 22); self.font_small = pygame.font.SysFont("malgungothic", 18)
-        # ✅ ResourceManager 사용
+        
+        # ✅ ResourceManager 사용 및 상대 경로 파일명으로 수정
         self.player_img = self.rm.get_image(player_config.get("IMG", ""), (80, 80))
-        self.img_spider = self.rm.get_image(r"assets\monster_spider.png", (30, 30))
-        self.img_skull = self.rm.get_image(r"assets\monster_bone.png", (30, 30))
-        self.img_midboss = self.rm.get_image(r"assets\middle_boss_dimenter.png", (120, 120))
-        self.img_finalboss = self.rm.get_image(r"assets\final_boss_pumpkin.png", (150, 150))
+        self.img_spider = self.rm.get_image("monster_spider.png", (30, 30))
+        self.img_skull = self.rm.get_image("monster_bone.png", (30, 30))
+        self.img_midboss = self.rm.get_image("middle_boss_dimenter.png", (120, 120))
+        self.img_finalboss = self.rm.get_image("final_boss_pumpkin.png", (150, 150))
         self.img_elec_skill = self.rm.get_image("Electric_Shock.jpg", (48, 48))
         self.img_fire_skill = self.rm.get_image("Fire_Ball.jpg", (60, 60))
+        
         self.weapons = [MagicGun(), FireBall(), ElectricShock(), ProtectShield()]
         self.overlay, self.paused, self.prev_second = None, False, -1
         self.btn_to_start = Button((WIDTH - 290, 14, 130, 40), "나가기", RED, (180, 55, 55), self.font)
