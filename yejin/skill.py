@@ -63,233 +63,249 @@ class SkillBase:
     def apply_upgrade(self):
         self.level += 1
 
-# # =========================
-# # 1. BaseShotSkill (마법 총)
-# # =========================
-# class BaseShotSkill(SkillBase):
-#     def __init__(self):
-#         super().__init__("마법 총", 1.0, 10)
-
-#     def update(self, dt, player, monsters, projectiles):
-#         super().update(dt, player, monsters, projectiles)
-#         if self.timer >= self.interval:
-#             self.timer = 0
-#             mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
-#             player_screen = getattr(player, 'screen_pos', pygame.Vector2(550, 325))
-#             direction = (mouse_pos - player_screen)
-#             if direction.length_squared() > 0:
-#                 target_dir = direction.normalize()
-#                 for i in range(self.level):
-#                     angle = (i - (self.level-1)/2) * 10
-#                     vel = target_dir.rotate(angle) * 500
-#                     projectiles.append(Projectile(player.pos, vel, self.base_damage))
-
 # =========================
-# 1. BaseShotSkill (마법 총) - 개수 및 발사 횟수 동시 강화
+# 1. BaseShotSkill (마법 총 / 마우스 조준 방식)
 # =========================
 class BaseShotSkill(SkillBase):
     def __init__(self):
-        # 기본 데미지 10, 초기 발사 간격 1.0초
+        # 1단계: 기본 발사 - 기본 데미지 10, 초기 발사 간격 1.0초
         super().__init__("마법 총", 1.0, 10)
 
     def update(self, dt, player, monsters, projectiles):
         super().update(dt, player, monsters, projectiles)
         
-        # [개선] 레벨업에 따른 발사 속도(간격) 감소 
-        # 레벨 1: 1.0초, 레벨 2: 0.85초, 레벨 3: 0.7초 ... (최소 0.2초)
-        current_interval = max(0.2, self.interval - (self.level - 1) * 0.15)
-        
+        # 레벨업에 따른 발사 속도(interval) 강화 반영
+        current_interval = self.interval
+        if self.level == 3:
+            current_interval *= 0.8  # 20% 속도 강화
+        elif self.level == 4:
+            current_interval *= 0.8  # 3단계 효과 유지
+        elif self.level >= 5:
+            current_interval = 0.15   # 5단계: 무한 연사 상태
+
         if self.timer >= current_interval:
             self.timer = 0
-            # 마우스 방향으로 조준
-            mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
-            player_screen = getattr(player, 'screen_pos', pygame.Vector2(550, 325))
-            direction = (mouse_pos - player_screen)
-            
-            if direction.length_squared() > 0:
-                target_dir = direction.normalize()
-                
-                # [개선] 레벨업에 따른 총알 개수 증가 (1레벨당 1개씩 추가)
-                # 총알 1개당 데미지는 10 고정
-                for i in range(self.level):
-                    # 총알들이 부채꼴 모양으로 퍼지도록 각도 계산
-                    angle = (i - (self.level - 1) / 2) * 10
-                    vel = target_dir.rotate(angle) * 500
-                    projectiles.append(Projectile(player.pos, vel, self.base_damage))
+            self.fire_to_mouse(player, projectiles)
 
+    def fire_to_mouse(self, player, projectiles):
+        """[기능 추가] 마우스 커서 방향으로 조준하여 발사"""
+        # 1. 마우스 현재 위치 가져오기
+        mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
+        
+        # 2. 플레이어의 화면상 위치 가져오기 (메인 엔진의 player.screen_pos 사용)
+        # 만약 player 객체에 screen_pos가 없다면 SCREEN_W/2, SCREEN_H/2를 기본값으로 사용
+        player_screen = getattr(player, 'screen_pos', pygame.Vector2(1100 // 2, 650 // 2))
+        
+        # 3. 방향 벡터 계산 (마우스 위치 - 플레이어 위치)
+        direction = (mouse_pos - player_screen)
+        
+        if direction.length_squared() > 0:
+            target_dir = direction.normalize()
+            
+            # 레벨별 투사체 개수 설정
+            projectile_count = 1
+            if self.level >= 2: projectile_count = 2
+            if self.level >= 4: projectile_count = 3
+            
+            final_damage = self.base_damage
+            if self.level >= 5:
+                final_damage += 5
+
+            # 4. 투사체 생성 및 발사
+            for i in range(projectile_count):
+                # 부채꼴 퍼짐 각도 계산
+                angle_offset = (i - (projectile_count - 1) / 2) * 15
+                vel = target_dir.rotate(angle_offset) * 650  # 빠른 투사체 속도
+                
+                # 투사체 객체 생성
+                projectiles.append(Projectile(
+                    player.pos, vel, final_damage, 
+                    size=(12, 12), life=2.0, color=(200, 200, 255)
+                ))
 
 # =========================
-# 2. FireConeSkill (파이어 볼) - 일직선 타겟팅 발사
+# 2. FireConeSkill (로켓 방식 파이어볼)
 # =========================
 class FireConeSkill(SkillBase):
     def __init__(self):
+        # 1단계: 기본 발사 - 무작위 적 타겟팅, 5초 주기, 데미지 10
         super().__init__("파이어 볼", 5.0, 10)
+        self.explosion_radius = 60  # 초기 폭발 반지름
 
     def update(self, dt, player, monsters, projectiles):
         super().update(dt, player, monsters, projectiles)
-        if self.timer >= self.interval:
-            self.timer = 0
-            # 레벨업 시 화염 기둥의 두께(width) 증가
-            width = 20 + (self.level - 1) * 20
-            damage = 10 + (self.level - 1) * 10
-            
-            # 가장 가까운 적 방향으로 일직선 조준
-            target_angle = random.uniform(0, 360)
-            if monsters:
-                closest = min(monsters, key=lambda m: (m.pos - player.pos).length_squared())
-                dir_to_m = closest.pos - player.pos
-                if dir_to_m.length_squared() > 0:
-                    # 오차 범위를 최소화하여 일직선 정확도를 높임
-                    target_angle = math.degrees(math.atan2(dir_to_m.y, dir_to_m.x))
+        
+        # 5단계: 연사력 강화 (발사 간격 30% 감소)
+        current_interval = self.interval
+        if self.level >= 5:
+            current_interval *= 0.7
 
-            # vel 방향으로 '일자'로 길게 뻗어나가도록 설정
-            vel = pygame.Vector2(1, 0).rotate(target_angle) * 450
-            # size=(두께, 길이) -> 길이를 150으로 늘려 일직선 기둥 느낌 강조
-            projectiles.append(Projectile(player.pos, vel, damage, size=(width, 150), color=(255, 60, 0), is_fire=True))
+        if self.timer >= current_interval:
+            self.timer = 0
+            self.fire_rocket(player, monsters, projectiles)
+
+    def fire_rocket(self, player, monsters, projectiles):
+        """1. 타겟팅 로직: 무작위 조준 및 발사"""
+        # 3단계: 공격 횟수 증가 (기본 1발, 3단계부터 2발)
+        target_count = 1
+        if self.level >= 3:
+            target_count = 2
+
+        # 4단계: 데미지 강화 (약 80% 상승)
+        final_damage = self.base_damage
+        if self.level >= 4:
+            final_damage *= 1.8
+
+        # 2단계 & 5단계: 폭발 범위 및 크기 설정
+        current_radius = self.explosion_radius
+        if self.level >= 2:
+            current_radius *= 1.5  # 2단계: 범위 1.5배 확대
+        if self.level >= 5:
+            current_radius *= 1.3  # 5단계: 추가 확대
+
+        # 투사체 크기 (5단계에서 대형화)
+        proj_size = (30, 80)
+        if self.level >= 5:
+            proj_size = (60, 150)
+
+        for _ in range(target_count):
+            target_pos = None
+            if monsters:
+                # [타겟팅] 화면 내 무작위 적 선택
+                target_enemy = random.choice(monsters)
+                target_pos = target_enemy.pos
+            else:
+                # 적이 없으면 무작위 방향 설정
+                random_angle = random.uniform(0, 360)
+                target_pos = player.pos + pygame.Vector2(1, 0).rotate(random_angle) * 100
+
+            # 직선 이동 벡터 계산 (쿠나이보다 느린 350 속도)
+            direction = (target_pos - player.pos)
+            if direction.length_squared() > 0:
+                vel = direction.normalize() * 350
+                
+                # 로켓 투사체 생성 (is_fire=True, 폭발 전용 속성 추가)
+                rocket = Projectile(
+                    player.pos, vel, final_damage, 
+                    size=proj_size, life=3.0, color=(255, 69, 0), is_fire=True
+                )
+                # 폭발 반지름 정보를 투사체 객체에 동적 저장 (충돌 시 사용)
+                rocket.explosion_radius = current_radius
+                projectiles.append(rocket)
+
+    def handle_explosion(self, projectile, monsters):
+        """2. 투사체 물리 및 폭발: 원형 범위 피해 판정"""
+        # 충돌 지점(projectile.pos)을 중심으로 반지름 내 모든 적 검색
+        explosion_pos = projectile.pos
+        radius_sq = projectile.explosion_radius ** 2
+        
+        for m in monsters:
+            if (m.pos - explosion_pos).length_squared() <= radius_sq:
+                m.hp -= projectile.damage
 
 # =========================
-# 3. ElectricShockSkill (일렉트릭 쇼크)
+# ElectricShockSkill (일렉트릭 쇼크 - 즉시 타격형)
 # =========================
 class ElectricShockSkill(SkillBase):
     def __init__(self):
-        super().__init__("일렉트릭 쇼크", 10.0, 10)
-        self.duration = 5.0
-        self.is_active = False
-        self.active_timer = 0.0
-        self.visual_timer = 0.0
+        # 기본 쿨타임 1.0초 (5단계에서 감소됨), 데미지 10
+        super().__init__("일렉트릭 쇼크", 1.0, 10)
+        self.strike_visuals = []  # 현재 화면에 그려질 번개 시각 효과 리스트
 
     def update(self, dt, player, monsters, projectiles):
-        if not self.is_active:
-            self.timer += dt
-            if self.timer >= self.interval:
-                self.is_active = True
-                self.active_timer = 0
-                self.timer = 0
-        else:
-            self.active_timer += dt
-            self.visual_timer += dt
-            current_duration = self.duration + (self.level - 1) * 5.0
-            radius = 50 + (self.level - 1) * 10
+        # 1. 공격 주기 및 상태 관리 (Update Logic)
+        self.timer += dt
+        
+        # [조건 반영] 5단계: 발사 간격(쿨타임) 대폭 감소
+        current_cooldown = self.interval
+        if self.level >= 5:
+            current_cooldown *= 0.4  # 60% 감소 (에너지 큐브 효과 모사)
 
-            if self.active_timer >= current_duration:
-                self.is_active = False
-            else:
-                if self.visual_timer >= 0.05:
-                    self.visual_timer = 0
-                    angle = random.uniform(0, 360)
-                    dist = random.uniform(0, radius)
-                    offset = pygame.Vector2(dist, 0).rotate(angle)
-                    v_pos = player.pos + offset
-                    projectiles.append(Projectile(v_pos, pygame.Vector2(0, random.uniform(-30, 30)), 
-                                                  0, size=(2, 10), life=0.15, color=(0, 255, 255)))
-                for m in monsters:
-                    if (m.pos - player.pos).length() <= radius:
-                        m.hp -= self.base_damage * dt
+        if self.timer >= current_cooldown:
+            self.timer = 0
+            self.strike_lightning(player, monsters)
 
-    def draw(self, surf, player, cam):
-        if self.is_active:
-            radius = 50 + (self.level - 1) * 10
-            screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y)
-            s = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
-            pygame.draw.circle(s, (0, 255, 255, 40), (radius, radius), radius)
-            surf.blit(s, (screen_pos[0] - radius, screen_pos[1] - radius))
-            pygame.draw.circle(surf, (0, 255, 255, 150), screen_pos, radius, 1)
+        # 시각 효과 타이머 업데이트 (0.1초 동안만 유지)
+        for visual in self.strike_visuals[:]:
+            visual['life'] -= dt
+            if visual['life'] <= 0:
+                self.strike_visuals.remove(visual)
 
-# # =========================
-# # ElectricShockSkill (일렉트릭 쇼크 -> 천둥 배터리)
-# # =========================
-# class ElectricShockSkill(SkillBase):
-#     def __init__(self):
-#         # 기본 10초 주기, 데미지 10 고정
-#         super().__init__("일렉트릭 쇼크", 10.0, 10)
-#         self.duration = 5.0      # 발동 유지 시간
-#         self.is_active = False
-#         self.active_timer = 0.0
-#         self.attack_timer = 0.0  # 번개가 떨어지는 개별 간격 타이머
-#         self.chain_count = 0     # 전이(체인) 횟수 (진화 시 사용)
+    def strike_lightning(self, player, monsters):
+        """즉시 판정 및 다중 타격 로직"""
+        if not monsters:
+            return
 
-#     def update(self, dt, player, monsters, projectiles):
-#         # 1. 발동 타이머 로직
-#         if not self.is_active:
-#             self.timer += dt
-#             if self.timer >= self.interval:
-#                 self.is_active = True
-#                 self.active_timer = 0
-#                 self.timer = 0
-#         else:
-#             self.active_timer += dt
-#             # 레벨업에 따른 유지 시간 증가 (5초 + 레벨당 5초)
-#             current_duration = self.duration + (self.level - 1) * 5.0
+        # [타겟팅 로직] 1~4단계: 레벨에 따라 번개 줄기 수 결정 (최대 4줄기 + 5단계 보너스)
+        strike_count = self.level
+        if self.level >= 5:
+            strike_count += 2  # 5단계 추가 공격 횟수
+
+        # [보스 우선순위] 보스가 있다면 리스트의 맨 앞으로 가져와 우선 타격 대상에 포함
+        sorted_monsters = sorted(monsters, key=lambda m: getattr(m, 'kind', '') == 'finalboss', reverse=True)
+        
+        # 타겟팅 (다중 타격): 적이 부족하면 있는 만큼만 선택
+        targets = random.sample(sorted_monsters, min(len(sorted_monsters), strike_count))
+
+        for target in targets:
+            # 1. 즉시 판정 (Hitbox Logic)
+            # 타겟팅되는 순간 즉시 HP 감소
+            damage = self.base_damage
+            if self.level >= 3: # 3단계: 데미지 증가
+                damage *= 1.5
+            target.hp -= damage
+
+            # 2. 시각 효과 생성 (지그재그 좌표 생성)
+            self.create_zigzag_effect(player.pos, target.pos)
+
+    def create_zigzag_effect(self, start_pos, end_pos):
+        """시작점과 끝점 사이에 무작위 오프셋을 가진 지그재그 좌표 생성"""
+        points = []
+        steps = 5 # 지그재그 꺾임 횟수
+        
+        # 하늘에서 떨어지는 느낌을 위해 시작점을 적의 머리 위로 설정
+        sky_start = pygame.Vector2(end_pos.x + random.randint(-20, 20), end_pos.y - 400)
+        
+        for i in range(steps + 1):
+            t = i / steps
+            # 선형 보간 점
+            base_pos = sky_start.lerp(end_pos, t)
+            if 0 < i < steps:
+                # 무작위 오프셋(Offset) 추가
+                offset = pygame.Vector2(random.randint(-15, 15), random.randint(-10, 10))
+                base_pos += offset
+            points.append(base_pos)
+        
+        self.strike_visuals.append({'points': points, 'life': 0.1})
+
+    def draw(self, surf, cam):
+        """지그재그 번개 렌더링"""
+        for visual in self.strike_visuals:
+            if len(visual['points']) < 2:
+                continue
             
-#             # 레벨업에 따른 번개 속도(간격) 조절 (레벨이 높을수록 더 자주 발사)
-#             # 기본 0.5초당 1발 -> 레벨당 0.1초씩 감소 (최소 0.1초)
-#             strike_interval = max(0.1, 0.5 - (self.level - 1) * 0.1)
-
-#             if self.active_timer >= current_duration:
-#                 self.is_active = False
-#             else:
-#                 self.attack_timer += dt
-#                 if self.attack_timer >= strike_interval:
-#                     self.attack_timer = 0
-#                     self.strike_lightning(player, monsters, projectiles)
-
-#     def strike_lightning(self, player, monsters, projectiles):
-#         """가장 가까운 적을 자동 조준하여 번개 투사체 생성"""
-#         if not monsters:
-#             return
-
-#         # 1. 자동 조준: 가장 가까운 적 포착 (필중)
-#         target = min(monsters, key=lambda m: (m.pos - player.pos).length_squared())
-        
-#         # 2. 번개 투사체 생성 (하늘에서 떨어지는 연출을 위해 적 위치 위쪽에 생성)
-#         strike_pos = pygame.Vector2(target.pos.x, target.pos.y - 100)
-#         # 속도를 아래로 빠르게 주어 내리꽂는 느낌 부여
-#         vel = pygame.Vector2(0, 1000)
-        
-#         # 번개 투사체 추가
-#         projectiles.append(Projectile(
-#             strike_pos, vel, self.base_damage, 
-#             size=(4, 40), life=0.1, color=(0, 255, 255)
-#         ))
-
-#         # 3. 진화 형태 효과: 천둥 배터리 (주변 전이 피해)
-#         # 만약 레벨이 5(최대)라면 주변 적에게 추가 전이 피해를 입힘
-#         if self.level >= 5:
-#             self.chain_reaction(target, monsters)
-
-#     def chain_reaction(self, main_target, monsters):
-#         """타격 시 주변 적에게 전이되는 광역 피해 (천둥 배터리 효과)"""
-#         chain_range = 150  # 전이 범위
-#         max_chains = 3     # 최대 전이 수
-#         count = 0
-        
-#         for m in monsters:
-#             if m == main_target: continue
-#             if (m.pos - main_target.pos).length() <= chain_range:
-#                 m.hp -= self.base_damage * 0.5 # 전이 데미지는 50%
-#                 count += 1
-#                 if count >= max_chains: break
-
-#     def draw(self, surf, player, cam):
-#         # 번개발사기는 투사체가 직접 조준하므로 별도의 범위 가이드는 그리지 않거나,
-#         # 활성화 상태임을 알리는 작은 이펙트를 플레이어 주변에 표시할 수 있습니다.
-#         if self.is_active:
-#             # 플레이어 머리 위에 충전 상태 표시 (하늘색 원)
-#             screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y - 40)
-#             pygame.draw.circle(surf, (0, 255, 255), screen_pos, 5)
-
+            # 카메라 좌표로 변환된 점들 생성
+            screen_points = [(p.x - cam.x, p.y - cam.y) for p in visual['points']]
+            
+            # 번개 외곽선 (하늘색/흰색)
+            pygame.draw.lines(surf, (200, 255, 255), False, screen_points, 3)
+            # 번개 중심선 (흰색)
+            pygame.draw.lines(surf, (255, 255, 255), False, screen_points, 1)
 
 # =========================
-# 4. ShieldSkill (프로텍트 쉴드)
+# 4. ShieldSkill (프로텍트 쉴드 - 지속 범위 및 감속)
 # =========================
 class ShieldSkill(SkillBase):
     def __init__(self):
+        # 1단계: 기본 활성화 - 반지름 50px, 기본 데미지 10, 10초 주기 발동
         super().__init__("프로텍트 쉴드", 10.0, 10)
         self.base_duration = 5.0
+        self.radius = 50
         self.is_active = False
         self.active_timer = 0.0
 
     def update(self, dt, player, monsters, projectiles):
+        # 1. 상태 관리 (활성화/비활성화 타이머)
         if not self.is_active:
             self.timer += dt
             if self.timer >= self.interval:
@@ -298,20 +314,58 @@ class ShieldSkill(SkillBase):
                 self.timer = 0
         else:
             self.active_timer += dt
+            # 레벨업에 따른 유지 기간 증가 (기본 5초 + 레벨당 5초)
             current_duration = self.base_duration + (self.level - 1) * 5.0
+            
+            # 2 & 5단계: 범위(반지름) 확대 로직
+            # 1단계(50) -> 2단계(x1.3) -> 5단계(x1.2 추가)
+            calc_radius = self.radius
+            if self.level >= 2: calc_radius *= 1.3
+            if self.level >= 5: calc_radius *= 1.2
+            
+            # 3 & 5단계: 데미지 강화 로직
+            final_damage = self.base_damage
+            if self.level >= 3: final_damage *= 1.5
+            if self.level >= 5: final_damage *= 1.4
+
             if self.active_timer >= current_duration:
+                # 보호막 해제 시 몬스터 속도 원복을 위해 추가 처리 필요 (아래 판정 로직 참고)
                 self.is_active = False
             else:
-                radius = 50 + (self.level - 1) * 10
+                # 2. 판정 로직: 범위 내 적에게 틱 데미지 및 감속(Slow) 적용
                 for m in monsters:
-                    if (m.pos - player.pos).length() <= radius:
-                        m.hp -= self.base_damage * dt
+                    dist_sq = (m.pos - player.pos).length_squared()
+                    if dist_sq <= calc_radius ** 2:
+                        # [틱 데미지] dt에 비례하여 지속적으로 HP 차감
+                        m.hp -= final_damage * dt
+                        
+                        # [4단계: 감속 장치] 범위 내 적 이동 속도 30% 감소 (0.7배)
+                        if self.level >= 4:
+                            # 몬스터의 원본 속도를 보존하면서 감속 적용
+                            if not hasattr(m, 'original_speed'):
+                                m.original_speed = m.speed
+                            m.speed = m.original_speed * 0.7
+                    else:
+                        # 범위를 벗어난 적은 속도 원상복구
+                        if hasattr(m, 'original_speed'):
+                            m.speed = m.original_speed
 
     def draw(self, surf, player, cam):
         if self.is_active:
-            radius = 50 + (self.level - 1) * 10
-            screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y)
-            s = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
-            pygame.draw.circle(s, (100, 150, 255, 80), (radius, radius), radius)
-            surf.blit(s, (screen_pos[0] - radius, screen_pos[1] - radius))
-            pygame.draw.circle(surf, (150, 200, 255), screen_pos, radius, 3)
+            # 현재 레벨에 따른 실시간 반지름 계산 (update 로직과 동일)
+            draw_radius = self.radius
+            if self.level >= 2: draw_radius *= 1.3
+            if self.level >= 5: draw_radius *= 1.2
+            
+            screen_pos = (int(player.pos.x - cam.x), int(player.pos.y - cam.y))
+            
+            # 시각 효과: 반투명 원형 보호막
+            shield_surf = pygame.Surface((draw_radius * 2, draw_radius * 2), pygame.SRCALPHA)
+            # 4단계 이상이면 감속 역장을 표현하기 위해 색상을 진하게 변경
+            shield_color = (100, 150, 255, 60) if self.level < 4 else (60, 100, 255, 90)
+            
+            pygame.draw.circle(shield_surf, shield_color, (int(draw_radius), int(draw_radius)), int(draw_radius))
+            surf.blit(shield_surf, (screen_pos[0] - draw_radius, screen_pos[1] - draw_radius))
+            
+            # 테두리 선
+            pygame.draw.circle(surf, (150, 200, 255), screen_pos, int(draw_radius), 2 if self.level < 5 else 4)

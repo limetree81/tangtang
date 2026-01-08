@@ -1,14 +1,14 @@
 import pygame
 import sys
 import random
-from skill import BaseShotSkill, FireConeSkill, ElectricShockSkill, ShieldSkill
+# skill.py 파일에서 클래스들을 가져옵니다.
+from skill import Projectile, BaseShotSkill, FireConeSkill, ElectricShockSkill, ShieldSkill
 
-# 만약 스킬 클래스들이 별도의 skill.py에 있다면 아래 주석을 해제하고 import 하세요.
-# from skill import * # =========================
+# =========================
 # 테스트 환경 설정
 # =========================
 SCREEN_W, SCREEN_H = 1100, 650
-MAP_W, MAP_H = 2000, 2000 # 넓은 맵
+MAP_W, MAP_H = 2000, 2000 
 FPS = 60
 
 # 색상 정의
@@ -24,31 +24,33 @@ GREEN = (50, 255, 100)
 class MockPlayer:
     def __init__(self):
         self.pos = pygame.Vector2(MAP_W // 2, MAP_H // 2)
-        # 스킬 클래스에서 사용하는 screen_pos (화면 중앙 고정 가정)
         self.screen_pos = pygame.Vector2(SCREEN_W // 2, SCREEN_H // 2)
         self.speed = 300
 
 class MockMonster:
-    def __init__(self, pos):
+    def __init__(self, pos, kind='normal'):
         self.pos = pygame.Vector2(pos)
         self.hp = 100
         self.max_hp = 100
-        self.radius = 20
+        self.radius = 25 if kind == 'finalboss' else 20
+        self.kind = kind # ElectricShockSkill의 보스 우선순위 로직 테스트용
+        # [수정] ShieldSkill의 슬로우 효과를 위해 speed 속성 추가
+        self.speed = 75 
 
     def update(self, player_pos, dt):
-        # 플레이어를 천천히 추적 (조준 테스트용)
         direction = (player_pos - self.pos)
-        if direction.length() > 0:
-            self.pos += direction.normalize() * 80 * dt
+        if direction.length() > 50:
+            # [수정] 고정값이 아닌 self.speed를 사용하여 감속 효과를 반영
+            self.pos += direction.normalize() * self.speed * dt
 
     def draw(self, surf, cam):
         screen_pos = self.pos - cam
-        # 몸체
-        pygame.draw.circle(surf, RED, (int(screen_pos.x), int(screen_pos.y)), self.radius)
-        # 체력바
-        health_width = 40 * (self.hp / self.max_hp)
-        pygame.draw.rect(surf, (50, 0, 0), (screen_pos.x - 20, screen_pos.y - 30, 40, 5))
-        pygame.draw.rect(surf, GREEN, (screen_pos.x - 20, screen_pos.y - 30, health_width, 5))
+        color = (255, 200, 0) if self.kind == 'finalboss' else RED
+        pygame.draw.circle(surf, color, (int(screen_pos.x), int(screen_pos.y)), self.radius)
+        
+        health_width = 40 * (max(0, self.hp) / self.max_hp)
+        pygame.draw.rect(surf, (50, 0, 0), (screen_pos.x - 20, screen_pos.y - 35, 40, 5))
+        pygame.draw.rect(surf, GREEN, (screen_pos.x - 20, screen_pos.y - 35, health_width, 5))
 
 # =========================
 # 메인 테스트 루프
@@ -56,11 +58,10 @@ class MockMonster:
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-    pygame.display.set_caption("Skill System Integration Test (Press 1-4 to Level Up)")
+    pygame.display.set_caption("Magic Survivor - Final Skill System Test")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("malgungothic", 18)
 
-    # 객체 초기화
     player = MockPlayer()
     cam = pygame.Vector2(player.pos.x - SCREEN_W // 2, player.pos.y - SCREEN_H // 2)
     
@@ -68,27 +69,25 @@ def main():
     skills = [BaseShotSkill(), FireConeSkill(), ElectricShockSkill(), ShieldSkill()]
     projectiles = []
     
-    # 몬스터 생성 (플레이어 주변)
-    monsters = [MockMonster(player.pos + pygame.Vector2(random.uniform(-400, 400), 
-                                                        random.uniform(-400, 400))) for _ in range(12)]
+    # 몬스터 생성 (일반 10마리 + 보스 1마리)
+    monsters = [MockMonster(player.pos + pygame.Vector2(random.uniform(-500, 500), 
+                                                        random.uniform(-500, 500))) for _ in range(10)]
+    monsters.append(MockMonster(player.pos + pygame.Vector2(300, 300), kind='finalboss'))
 
     while True:
         dt = clock.tick(FPS) / 1000.0
         screen.fill(BLACK)
 
-        # 1. 이벤트 처리
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN:
-                # 숫자키 1~4로 스킬 레벨업 테스트
+                # 1~4번 키로 레벨업 테스트
                 if pygame.K_1 <= event.key <= pygame.K_4:
                     idx = event.key - pygame.K_1
                     skills[idx].apply_upgrade()
-                    print(f"{skills[idx].name} 레벨업! 현재 레벨: {skills[idx].level}")
 
-        # 2. 플레이어 이동 및 카메라 업데이트
+        # 플레이어 이동
         keys = pygame.key.get_pressed()
         move = pygame.Vector2(0, 0)
         if keys[pygame.K_w]: move.y -= 1
@@ -98,7 +97,7 @@ def main():
         if move.length_squared() > 0:
             player.pos += move.normalize() * player.speed * dt
         
-        # 카메라는 플레이어를 중앙에 유지
+        # 카메라 업데이트
         cam.x = player.pos.x - SCREEN_W // 2
         cam.y = player.pos.y - SCREEN_H // 2
 
@@ -109,10 +108,9 @@ def main():
         for p in projectiles[:]:
             p.update(dt)
             if p.life <= 0:
-                projectiles.remove(p)
-                continue
+                projectiles.remove(p); continue
             
-            # 투사체 vs 몬스터 충돌 (데미지가 있는 투사체만)
+            # 투사체 충돌 판정 (파이어볼은 폭발 판정 등이 추가될 수 있음)
             if p.damage > 0:
                 for m in monsters:
                     if (m.pos - p.pos).length() < m.radius + 5:
@@ -120,46 +118,39 @@ def main():
                         if p in projectiles: projectiles.remove(p)
                         break
 
-        # 4. 몬스터 업데이트 (사망 처리 포함)
+        # 4. 몬스터 업데이트 (사망 및 리스폰)
         for m in monsters[:]:
             m.update(player.pos, dt)
             if m.hp <= 0:
                 monsters.remove(m)
-                # 새로운 몬스터 보충
-                new_pos = player.pos + pygame.Vector2(random.uniform(-600, 600), random.uniform(-600, 600))
+                new_pos = player.pos + pygame.Vector2(random.uniform(-700, 700), random.uniform(-700, 700))
                 monsters.append(MockMonster(new_pos))
 
         # 5. 그리기 (Render)
-        # 배경 격자 (카메라 이동 확인용)
+        # 배경 격자
         grid_size = 100
-        for x in range(0, MAP_W, grid_size):
+        for x in range(int(cam.x // grid_size) * grid_size, int((cam.x + SCREEN_W) // grid_size + 1) * grid_size, grid_size):
             pygame.draw.line(screen, (30, 30, 40), (x - cam.x, 0), (x - cam.x, SCREEN_H))
-        for y in range(0, MAP_H, grid_size):
+        for y in range(int(cam.y // grid_size) * grid_size, int((cam.y + SCREEN_H) // grid_size + 1) * grid_size, grid_size):
             pygame.draw.line(screen, (30, 30, 40), (0, y - cam.y), (SCREEN_W, y - cam.y))
 
-        # 몬스터 & 투사체
+        # 몬스터 & 투사체 그리기
         for m in monsters: m.draw(screen, cam)
         for p in projectiles: p.draw(screen, cam)
 
-        # 특수 시각 효과 (일렉트릭 쇼크, 보호막)
-        skills[2].draw(screen, player, cam)
-        skills[3].draw(screen, player, cam)
+        # 스킬별 특수 시각 효과
+        skills[2].draw(screen, cam)         # 일렉트릭 쇼크 (번개)
+        skills[3].draw(screen, player, cam) # 프로텍트 쉴드
 
-        # 플레이어 본체
-        pygame.draw.circle(screen, WHITE, (SCREEN_W // 2, SCREEN_H // 2), 20)
+        # 플레이어 표시
+        pygame.draw.circle(screen, WHITE, (int(player.pos.x - cam.x), int(player.pos.y - cam.y)), 20)
 
-        # UI 정보
-        y_offset = 20
-        controls = ["WASD: 이동", "Mouse: 조준", "1-4: 스킬 레벨업"]
-        for ctrl in controls:
-            img = font.render(ctrl, True, (150, 150, 150))
-            screen.blit(img, (SCREEN_W - 150, y_offset))
-            y_offset += 25
-
+        # UI 정보 표시
         y_offset = 20
         for s in skills:
-            color = BLUE if (hasattr(s, 'is_active') and s.is_active) else WHITE
-            text = f"{s.name} LV.{s.level} | Timer: {s.timer:.1f}s"
+            status = "ACTIVE" if (hasattr(s, 'is_active') and s.is_active) else "CD"
+            color = BLUE if status == "ACTIVE" else WHITE
+            text = f"{s.name} LV.{s.level} [{status}]"
             img = font.render(text, True, color)
             screen.blit(img, (20, y_offset))
             y_offset += 30
