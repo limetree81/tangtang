@@ -116,7 +116,7 @@ class BaseShotSkill(SkillBase):
                     angle = (i - (self.level - 1) / 2) * 10
                     vel = target_dir.rotate(angle) * 500
                     projectiles.append(Projectile(player.pos, vel, self.base_damage))
-                    
+
 
 # =========================
 # 2. FireConeSkill (파이어 볼) - 일직선 타겟팅 발사
@@ -147,69 +147,18 @@ class FireConeSkill(SkillBase):
             # size=(두께, 길이) -> 길이를 150으로 늘려 일직선 기둥 느낌 강조
             projectiles.append(Projectile(player.pos, vel, damage, size=(width, 150), color=(255, 60, 0), is_fire=True))
 
-# # =========================
-# # 3. ElectricShockSkill (일렉트릭 쇼크)
-# # =========================
-# class ElectricShockSkill(SkillBase):
-#     def __init__(self):
-#         super().__init__("일렉트릭 쇼크", 10.0, 10)
-#         self.duration = 5.0
-#         self.is_active = False
-#         self.active_timer = 0.0
-#         self.visual_timer = 0.0
-
-#     def update(self, dt, player, monsters, projectiles):
-#         if not self.is_active:
-#             self.timer += dt
-#             if self.timer >= self.interval:
-#                 self.is_active = True
-#                 self.active_timer = 0
-#                 self.timer = 0
-#         else:
-#             self.active_timer += dt
-#             self.visual_timer += dt
-#             current_duration = self.duration + (self.level - 1) * 5.0
-#             radius = 50 + (self.level - 1) * 10
-
-#             if self.active_timer >= current_duration:
-#                 self.is_active = False
-#             else:
-#                 if self.visual_timer >= 0.05:
-#                     self.visual_timer = 0
-#                     angle = random.uniform(0, 360)
-#                     dist = random.uniform(0, radius)
-#                     offset = pygame.Vector2(dist, 0).rotate(angle)
-#                     v_pos = player.pos + offset
-#                     projectiles.append(Projectile(v_pos, pygame.Vector2(0, random.uniform(-30, 30)), 
-#                                                   0, size=(2, 10), life=0.15, color=(0, 255, 255)))
-#                 for m in monsters:
-#                     if (m.pos - player.pos).length() <= radius:
-#                         m.hp -= self.base_damage * dt
-
-#     def draw(self, surf, player, cam):
-#         if self.is_active:
-#             radius = 50 + (self.level - 1) * 10
-#             screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y)
-#             s = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
-#             pygame.draw.circle(s, (0, 255, 255, 40), (radius, radius), radius)
-#             surf.blit(s, (screen_pos[0] - radius, screen_pos[1] - radius))
-#             pygame.draw.circle(surf, (0, 255, 255, 150), screen_pos, radius, 1)
-
 # =========================
-# ElectricShockSkill (일렉트릭 쇼크 -> 천둥 배터리)
+# 3. ElectricShockSkill (일렉트릭 쇼크)
 # =========================
 class ElectricShockSkill(SkillBase):
     def __init__(self):
-        # 기본 10초 주기, 데미지 10 고정
         super().__init__("일렉트릭 쇼크", 10.0, 10)
-        self.duration = 5.0      # 발동 유지 시간
+        self.duration = 5.0
         self.is_active = False
         self.active_timer = 0.0
-        self.attack_timer = 0.0  # 번개가 떨어지는 개별 간격 타이머
-        self.chain_count = 0     # 전이(체인) 횟수 (진화 시 사용)
+        self.visual_timer = 0.0
 
     def update(self, dt, player, monsters, projectiles):
-        # 1. 발동 타이머 로직
         if not self.is_active:
             self.timer += dt
             if self.timer >= self.interval:
@@ -218,65 +167,116 @@ class ElectricShockSkill(SkillBase):
                 self.timer = 0
         else:
             self.active_timer += dt
-            # 레벨업에 따른 유지 시간 증가 (5초 + 레벨당 5초)
+            self.visual_timer += dt
             current_duration = self.duration + (self.level - 1) * 5.0
-            
-            # 레벨업에 따른 번개 속도(간격) 조절 (레벨이 높을수록 더 자주 발사)
-            # 기본 0.5초당 1발 -> 레벨당 0.1초씩 감소 (최소 0.1초)
-            strike_interval = max(0.1, 0.5 - (self.level - 1) * 0.1)
+            radius = 50 + (self.level - 1) * 10
 
             if self.active_timer >= current_duration:
                 self.is_active = False
             else:
-                self.attack_timer += dt
-                if self.attack_timer >= strike_interval:
-                    self.attack_timer = 0
-                    self.strike_lightning(player, monsters, projectiles)
-
-    def strike_lightning(self, player, monsters, projectiles):
-        """가장 가까운 적을 자동 조준하여 번개 투사체 생성"""
-        if not monsters:
-            return
-
-        # 1. 자동 조준: 가장 가까운 적 포착 (필중)
-        target = min(monsters, key=lambda m: (m.pos - player.pos).length_squared())
-        
-        # 2. 번개 투사체 생성 (하늘에서 떨어지는 연출을 위해 적 위치 위쪽에 생성)
-        strike_pos = pygame.Vector2(target.pos.x, target.pos.y - 100)
-        # 속도를 아래로 빠르게 주어 내리꽂는 느낌 부여
-        vel = pygame.Vector2(0, 1000)
-        
-        # 번개 투사체 추가
-        projectiles.append(Projectile(
-            strike_pos, vel, self.base_damage, 
-            size=(4, 40), life=0.1, color=(0, 255, 255)
-        ))
-
-        # 3. 진화 형태 효과: 천둥 배터리 (주변 전이 피해)
-        # 만약 레벨이 5(최대)라면 주변 적에게 추가 전이 피해를 입힘
-        if self.level >= 5:
-            self.chain_reaction(target, monsters)
-
-    def chain_reaction(self, main_target, monsters):
-        """타격 시 주변 적에게 전이되는 광역 피해 (천둥 배터리 효과)"""
-        chain_range = 150  # 전이 범위
-        max_chains = 3     # 최대 전이 수
-        count = 0
-        
-        for m in monsters:
-            if m == main_target: continue
-            if (m.pos - main_target.pos).length() <= chain_range:
-                m.hp -= self.base_damage * 0.5 # 전이 데미지는 50%
-                count += 1
-                if count >= max_chains: break
+                if self.visual_timer >= 0.05:
+                    self.visual_timer = 0
+                    angle = random.uniform(0, 360)
+                    dist = random.uniform(0, radius)
+                    offset = pygame.Vector2(dist, 0).rotate(angle)
+                    v_pos = player.pos + offset
+                    projectiles.append(Projectile(v_pos, pygame.Vector2(0, random.uniform(-30, 30)), 
+                                                  0, size=(2, 10), life=0.15, color=(0, 255, 255)))
+                for m in monsters:
+                    if (m.pos - player.pos).length() <= radius:
+                        m.hp -= self.base_damage * dt
 
     def draw(self, surf, player, cam):
-        # 번개발사기는 투사체가 직접 조준하므로 별도의 범위 가이드는 그리지 않거나,
-        # 활성화 상태임을 알리는 작은 이펙트를 플레이어 주변에 표시할 수 있습니다.
         if self.is_active:
-            # 플레이어 머리 위에 충전 상태 표시 (하늘색 원)
-            screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y - 40)
-            pygame.draw.circle(surf, (0, 255, 255), screen_pos, 5)
+            radius = 50 + (self.level - 1) * 10
+            screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y)
+            s = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (0, 255, 255, 40), (radius, radius), radius)
+            surf.blit(s, (screen_pos[0] - radius, screen_pos[1] - radius))
+            pygame.draw.circle(surf, (0, 255, 255, 150), screen_pos, radius, 1)
+
+# # =========================
+# # ElectricShockSkill (일렉트릭 쇼크 -> 천둥 배터리)
+# # =========================
+# class ElectricShockSkill(SkillBase):
+#     def __init__(self):
+#         # 기본 10초 주기, 데미지 10 고정
+#         super().__init__("일렉트릭 쇼크", 10.0, 10)
+#         self.duration = 5.0      # 발동 유지 시간
+#         self.is_active = False
+#         self.active_timer = 0.0
+#         self.attack_timer = 0.0  # 번개가 떨어지는 개별 간격 타이머
+#         self.chain_count = 0     # 전이(체인) 횟수 (진화 시 사용)
+
+#     def update(self, dt, player, monsters, projectiles):
+#         # 1. 발동 타이머 로직
+#         if not self.is_active:
+#             self.timer += dt
+#             if self.timer >= self.interval:
+#                 self.is_active = True
+#                 self.active_timer = 0
+#                 self.timer = 0
+#         else:
+#             self.active_timer += dt
+#             # 레벨업에 따른 유지 시간 증가 (5초 + 레벨당 5초)
+#             current_duration = self.duration + (self.level - 1) * 5.0
+            
+#             # 레벨업에 따른 번개 속도(간격) 조절 (레벨이 높을수록 더 자주 발사)
+#             # 기본 0.5초당 1발 -> 레벨당 0.1초씩 감소 (최소 0.1초)
+#             strike_interval = max(0.1, 0.5 - (self.level - 1) * 0.1)
+
+#             if self.active_timer >= current_duration:
+#                 self.is_active = False
+#             else:
+#                 self.attack_timer += dt
+#                 if self.attack_timer >= strike_interval:
+#                     self.attack_timer = 0
+#                     self.strike_lightning(player, monsters, projectiles)
+
+#     def strike_lightning(self, player, monsters, projectiles):
+#         """가장 가까운 적을 자동 조준하여 번개 투사체 생성"""
+#         if not monsters:
+#             return
+
+#         # 1. 자동 조준: 가장 가까운 적 포착 (필중)
+#         target = min(monsters, key=lambda m: (m.pos - player.pos).length_squared())
+        
+#         # 2. 번개 투사체 생성 (하늘에서 떨어지는 연출을 위해 적 위치 위쪽에 생성)
+#         strike_pos = pygame.Vector2(target.pos.x, target.pos.y - 100)
+#         # 속도를 아래로 빠르게 주어 내리꽂는 느낌 부여
+#         vel = pygame.Vector2(0, 1000)
+        
+#         # 번개 투사체 추가
+#         projectiles.append(Projectile(
+#             strike_pos, vel, self.base_damage, 
+#             size=(4, 40), life=0.1, color=(0, 255, 255)
+#         ))
+
+#         # 3. 진화 형태 효과: 천둥 배터리 (주변 전이 피해)
+#         # 만약 레벨이 5(최대)라면 주변 적에게 추가 전이 피해를 입힘
+#         if self.level >= 5:
+#             self.chain_reaction(target, monsters)
+
+#     def chain_reaction(self, main_target, monsters):
+#         """타격 시 주변 적에게 전이되는 광역 피해 (천둥 배터리 효과)"""
+#         chain_range = 150  # 전이 범위
+#         max_chains = 3     # 최대 전이 수
+#         count = 0
+        
+#         for m in monsters:
+#             if m == main_target: continue
+#             if (m.pos - main_target.pos).length() <= chain_range:
+#                 m.hp -= self.base_damage * 0.5 # 전이 데미지는 50%
+#                 count += 1
+#                 if count >= max_chains: break
+
+#     def draw(self, surf, player, cam):
+#         # 번개발사기는 투사체가 직접 조준하므로 별도의 범위 가이드는 그리지 않거나,
+#         # 활성화 상태임을 알리는 작은 이펙트를 플레이어 주변에 표시할 수 있습니다.
+#         if self.is_active:
+#             # 플레이어 머리 위에 충전 상태 표시 (하늘색 원)
+#             screen_pos = (player.pos.x - cam.x, player.pos.y - cam.y - 40)
+#             pygame.draw.circle(surf, (0, 255, 255), screen_pos, 5)
 
 
 # =========================
