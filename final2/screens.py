@@ -52,6 +52,24 @@ def draw_divider(surf, x1, y, x2, alpha=120, thickness=2):
     pygame.draw.rect(line, (230, 230, 235, alpha), (0, 0, w, thickness), border_radius=thickness // 2)
     surf.blit(line, (min(x1, x2), y))
 
+# ✅ [추가] 체력 회복 스킬 클래스
+class HealSkill:
+    def __init__(self):
+        self.name = "체력 회복 (50%)"
+        self.level = 0
+        self.max_level = MAX_SKILL_LEVEL # 최대 사용 횟수 제한 (예: 5회)
+        self.player = None  # GameScreen에서 설정됨
+
+    def apply_upgrade(self):
+        self.level += 1
+        if self.player:
+            # 최대 체력의 50% 회복
+            heal_amount = self.player.max_hp * 0.5
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal_amount)
+
+    def update(self, dt, player, enemies, projectiles):
+        pass  # 즉시 발동형이라 업데이트 로직 없음
+
 class Button:
     def __init__(self, rect, text, color=GRAY, hover_color=BLUE, text_color=WHITE, radius=16, font=None):
         self.rect = pygame.Rect(rect)
@@ -190,6 +208,7 @@ class SkillChoiceOverlay:
     def __init__(self, gs):
         self.gs = gs
         self.active = True
+        # 레벨이 마스터(5) 미만인 스킬들만 후보로 선정
         self.options = [s for s in gs.skills if s.level < MAX_SKILL_LEVEL]
         random.shuffle(self.options)
         self.options = self.options[:3]
@@ -228,7 +247,17 @@ class SkillChoiceOverlay:
             draw_rounded_rect(surf, r, (180, 180, 195), radius=18, width=2)
             
             surf.blit(self.name_font.render(sk.name, True, WHITE), (r.x + 22, r.y + 24))
-            lvl_txt = f"현재 레벨: {sk.level}" if sk.level > 0 else "신규 해금!"
+            
+            # ✅ 스킬 타입에 따라 설명 텍스트 분기 처리
+            if isinstance(sk, HealSkill):
+                # 힐 스킬인 경우 남은 사용 횟수 표시
+                # MAX_SKILL_LEVEL을 최대 횟수로 간주
+                remain = MAX_SKILL_LEVEL - sk.level
+                lvl_txt = f"남은 사용 횟수: {remain}/{MAX_SKILL_LEVEL}"
+            else:
+                # 일반 스킬인 경우 현재 레벨 표시
+                lvl_txt = f"현재 레벨: {sk.level}" if sk.level > 0 else "신규 해금!"
+                
             surf.blit(self.font.render(lvl_txt, True, (210, 210, 220)), (r.x + 22, r.y + 76))
             surf.blit(self.font.render(f"[{i+1}] 선택", True, (210, 210, 220)), (r.x + 22, r.y + 116))
 
@@ -355,10 +384,16 @@ class GameScreen:
         self.audio.play(BGM_GAME)
         self._load_resources(player_config)
         
-        # 스킬 초기화
-        self.skills = [BaseShotSkill(), FireConeSkill(), ElectricShockSkill(), ShieldSkill()]
+        # ✅ 스킬 초기화 (HealSkill 포함)
+        self.skills = [BaseShotSkill(), FireConeSkill(), ElectricShockSkill(), ShieldSkill(), HealSkill()]
+        
+        # 1레벨부터 시작하는 기본 스킬(BaseShotSkill) 제외하고 나머지는 0레벨
         for i in range(1, len(self.skills)):
             self.skills[i].level = 0
+
+        # ✅ 모든 스킬에 플레이어 참조 주입 (HealSkill 회복 효과를 위해 필수)
+        for s in self.skills:
+            s.player = self.controller.player
         
         self.overlay = None; self.paused = False; self.pause_overlay = None
         
@@ -367,7 +402,6 @@ class GameScreen:
         self.font_small = pygame.font.SysFont("malgungothic", 18)
         
         # UI Buttons (상단)
-        # ✅ [수정] font 인자를 키워드 인자(font=)로 전달하여 text_color 위치에 들어가지 않도록 수정
         self.btn_to_start = Button((WIDTH - 290, 14, 130, 40), "나가기", RED, (180, 55, 55), font=pygame.font.SysFont("malgungothic", 22), radius=14)
         self.btn_pause = Button((WIDTH - 150, 14, 130, 40), "Pause (P)", (90, 90, 110), (120, 120, 140), font=pygame.font.SysFont("malgungothic", 22), radius=14)
         
@@ -544,6 +578,7 @@ class EndScreen:
         self.panel_rect = pygame.Rect((WIDTH - self.PANEL_W)//2, btn_y - 28 - self.PANEL_H, self.PANEL_W, self.PANEL_H)
 
     def _stop_clear_sound(self):
+        """화면 전환 시 클리어 브금(SFX)이 재생 중이라면 중단합니다."""
         if self.success and BGM_CLEAR in self.audio.sfx_cache:
             self.audio.sfx_cache[BGM_CLEAR].stop()
 

@@ -35,7 +35,8 @@ class Player:
         self.screen_pos = pygame.Vector2(self.pos.x, self.pos.y)
 
     def add_exp(self, amount: int) -> bool:
-        if self.level >= 20:
+        # ✅ 최고 레벨 23으로 수정
+        if self.level >= 23:
             return False
         self.exp += int(amount)
         leveled_up = False
@@ -52,15 +53,15 @@ class Enemy:
     def __init__(self, kind, pos, hp, exp_reward, img, radius=18):
         self.kind = kind
         self.pos = pygame.Vector2(pos)
-        self.hp = float(hp)
-        self.max_hp = float(hp)
-        self.exp_reward = int(exp_reward)
-        self.radius = radius
+        self.max_hp = hp
+        self.hp = hp
+        self.exp_reward = exp_reward
         self.img = img
-        self.speed = 110 if kind in ("spider", "skull") else 220
-        # ShieldSkill 감속 효과를 위해 원본 속도 저장용
-        self.original_speed = self.speed 
+        self.radius = radius
+        
+        self.speed = 100
         self.random_vel = pygame.Vector2(0, 0)
         self.random_change_t = 0.0
 
-    def alive(self): return self.hp > 0
+    def alive(self):
+        return self.hp > 0
