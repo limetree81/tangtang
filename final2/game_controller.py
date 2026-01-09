@@ -18,6 +18,7 @@ class WaveManager:
         self.boss_deadline = None
         self.active_boss_kind = None
         self.max_enemies_alive = 60
+        self.boss_time_over = False # ✅ 보스 시간 초과 플래그 추가
 
     def update(self, dt, gs, controller):
         self.elapsed += dt
@@ -32,6 +33,10 @@ class WaveManager:
             self._spawn_boss(gs, controller, "midboss")
         if not self.finalboss_spawned and self.elapsed >= 240:
             self._spawn_boss(gs, controller, "finalboss")
+            
+        # ✅ 보스 제한 시간 체크 로직 추가
+        if self.boss_deadline and self.elapsed >= self.boss_deadline:
+            self.boss_time_over = True
 
     def _spawn_routine(self, gs, controller):
         if len(controller.enemies) < self.max_enemies_alive:
@@ -59,14 +64,13 @@ class WaveManager:
         
         self.active_boss_kind = kind
         self.boss_deadline = self.elapsed + 60.0
+        self.boss_time_over = False # 스폰 시 초기화
         
-        # ✅ [수정] bgm -> audio로 변경 (GameScreen 속성 이름 일치)
+        # 사운드 제어
         if is_mid:
-            # 중간 보스: 효과음 1회 재생
             gs.audio.play_sfx(SFX_MIDBOSS_SPAWN)
             self.midboss_spawned = True
         else:
-            # 최종 보스: 배경음악 교체
             gs.audio.play_bgm(BGM_FINAL_BOSS)
             self.finalboss_spawned = True
 
@@ -86,6 +90,11 @@ class GameController:
     def tick_logic(self, dt, gs):
         self.wave_mgr.update(dt, gs, self)
         
+        # ✅ 보스 시간 초과 시 게임 종료 처리
+        if self.wave_mgr.boss_time_over:
+            gs.finish_game(False, "보스 처치 시간 초과!")
+            return
+
         keys = pygame.key.get_pressed()
         self.player.move(dt, keys)
         
@@ -109,7 +118,7 @@ class GameController:
         for s in gs.skills:
             if s.level > 0: s.update(dt, self.player, self.enemies, self.skill_projectiles)
             
-        # [충돌 로직 유지] 투사체 이동 및 적과의 충돌 처리
+        # 투사체 이동 및 적과의 충돌 처리
         for p in self.skill_projectiles[:]:
             p.update(dt)
             
@@ -168,6 +177,7 @@ class GameController:
                     if self.player.add_exp(800): leveled_up = True
                     self.wave_mgr.boss_deadline = None
                     self.wave_mgr.active_boss_kind = None
+                    self.wave_mgr.boss_time_over = False # ✅ 보스 처치 시 플래그 초기화
                 elif e.kind == "finalboss":
                     gs.finish_game(True, "최종 보스 처치!")
                 e._rewarded = True

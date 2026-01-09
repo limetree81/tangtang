@@ -369,3 +369,32 @@ class ShieldSkill(SkillBase):
             
             # 테두리 선
             pygame.draw.circle(surf, (150, 200, 255), screen_pos, int(draw_radius), 2 if self.level < 5 else 4)
+
+# =========================
+# HealPotionSkill (회복 물약 - HP 회복형(3회 한정))
+# =========================
+class HealPotionSkill(SkillBase):
+    def __init__(self):
+        # interval, damage는 의미 없지만 SkillBase 구조 유지용
+        super().__init__("회복 물약", interval=0, damage=0)
+        self.max_uses = 3          # 최대 3회
+        self.heal_amount = 50     # 회복량
+        self.pending_heal = False
+
+    def apply_upgrade(self):
+        """
+        레벨업 = 물약 선택
+        선택 즉시 회복
+        """
+        if self.level < self.max_uses:
+            self.level += 1
+            self.pending_heal = True
+
+    def update(self, dt, player, monsters, projectiles):
+        if self.pending_heal:
+            player.hp = min(player.max_hp, player.hp + self.heal_amount)
+            self.pending_heal = False
+
+    def is_max(self):
+        """레벨업 목록에서 제거용"""
+        return self.level >= self.max_uses
