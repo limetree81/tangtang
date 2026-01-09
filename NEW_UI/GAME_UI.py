@@ -17,14 +17,18 @@ BLACK = (12, 12, 15)
 BLUE = (70, 160, 255)
 RED = (235, 80, 80)
 
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+IMAGE_DIR = os.path.join(BASE_PATH, "image")
+
 # ✅ 여기만 네 환경에 맞게 바꿔줘
 ASSET = {
-    "bg": r"C:\Users\KDT43\Project1\tangtang\KHG\game_background.png",
-    "player": r"C:\Users\KDT43\Project1\tangtang\KHG\player_1.png",
-    "spider": r"C:\Users\KDT43\Project1\tangtang\KHG\monster_spider.png",
-    "skull": r"C:\Users\KDT43\Project1\tangtang\KHG\monster_bone.png",
-    "midboss": r"C:\Users\KDT43\Project1\tangtang\KHG\middle_boss_dimenter.png",
-    "finalboss": r"C:\Users\KDT43\Project1\tangtang\KHG\final_boss_pumpkin.png",
+    "bg": os.path.join(IMAGE_DIR, "game_background.png"),
+    "player": os.path.join(IMAGE_DIR, "player_1.png"),
+    "spider": os.path.join(IMAGE_DIR, "monster_spider.png"),
+    "skull": os.path.join(IMAGE_DIR, "monster_bone.png"),
+    "midboss": os.path.join(IMAGE_DIR, "middle_boss_dimenter.png"),
+    "finalboss": os.path.join(IMAGE_DIR, "final_boss_pumpkin.png"),
 }
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))

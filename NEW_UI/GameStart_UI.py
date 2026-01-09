@@ -18,26 +18,34 @@ BLUE = (70, 160, 255)
 GREEN = (60, 210, 120)
 RED = (235, 80, 80)
 
-# ✅ 경로 설정 (Game_Play.py 기준 경로 사용)
-BACKGROUND_PATH = r"C:\Users\KDT43\Project1\tangtang\KHG\game_background.png"
-PLAYER_IMG_PATHS = [
-    r"C:\Users\KDT43\Project1\tangtang\KHG\player_1.png",
-    r"C:\Users\KDT43\Project1\tangtang\KHG\player_2.png",
-    r"C:\Users\KDT43\Project1\tangtang\KHG\player_3.png",
-]
-
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Magic Survivor - Start UI")
-clock = pygame.time.Clock()
-
 # 폰트 설정
 FONT_TITLE = pygame.font.SysFont("malgungothic", 64, bold=True)
 FONT_H2 = pygame.font.SysFont("malgungothic", 26, bold=True)
 FONT = pygame.font.SysFont("malgungothic", 20)
 FONT_SMALL = pygame.font.SysFont("malgungothic", 16)
 
+# 상대 경로 설정을 위한 기준점
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+IMAGE_DIR = os.path.join(BASE_PATH, "image")
+
+# ✅ 배경 이미지 경로 따로 분리
+BACKGROUND_PATH = os.path.join(IMAGE_DIR, "game_background.png")
+
+# ✅ PLAYER_IMG_PATHS 수정: 항목 사이 쉼표(,) 추가 및 대괄호([]) 확인
+PLAYER_IMG_PATHS = [
+    os.path.join(IMAGE_DIR, "Player_1.png"),
+    os.path.join(IMAGE_DIR, "Player_2.png"),
+    os.path.join(IMAGE_DIR, "Player_3.png")
+]
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Magic Survivor - Start UI")
+clock = pygame.time.Clock()
+
+# ... (폰트 설정 및 Helpers 함수들은 기존과 동일)
+
 # -----------------------------
-# Helpers
+# Helpers (유지)
 # -----------------------------
 def load_image_safe(path, size=None):
     try:
@@ -60,9 +68,8 @@ def draw_checkbox(surf, rect, checked=False):
         p3 = (rect.x + rect.w - 3, rect.y + 4)
         pygame.draw.lines(surf, (120, 240, 160), False, [p1, p2, p3], 3)
 
-# -----------------------------
-# UI Components
-# -----------------------------
+# ... (Button, PlayerCard, StageCard 클래스는 기존 코드 그대로 사용)
+
 class Button:
     def __init__(self, rect, text, color=GRAY, hover_color=BLUE, text_color=WHITE, radius=18):
         self.rect = pygame.Rect(rect)
@@ -149,32 +156,29 @@ class StageCard:
 # -----------------------------
 class StartScene:
     def __init__(self):
-        # 배경 로드
+        # ✅ 배경 로드 (따로 분리한 BACKGROUND_PATH 사용)
         self.bg = load_image_safe(BACKGROUND_PATH, (WIDTH, HEIGHT))
         
-        # 플레이어 데이터 및 이미지
         self.PLAYERS = [
             {"id": "tank",   "name": "플레이어 1", "HP":" : 150", "SPEED":" : 240", "DAMAGE":" : x 1.0"},
             {"id": "speed",  "name": "플레이어 2", "HP":" : 100", "SPEED":" : 360", "DAMAGE":" : x 1.0"},
             {"id": "damage", "name": "플레이어 3", "HP":" : 100", "SPEED":" : 240", "DAMAGE":" : x 1.5"},
         ]
         
-        # 레이아웃 설정
         self.card_w, self.card_h = 250, 410
         self.gap = 30
         self.y_cards = 170
         total_w = self.card_w * 4 + self.gap * 3
         self.start_x = (WIDTH - total_w) // 2
 
-        # 캐릭터 카드 생성 (이미지 포함)
         self.cards = []
         for i in range(3):
+            # ✅ i번째 이미지 파일을 로드
             img = load_image_safe(PLAYER_IMG_PATHS[i], (self.card_w - 32, 210))
             rect = (self.start_x + i * (self.card_w + self.gap), self.y_cards, self.card_w, self.card_h)
             self.cards.append(PlayerCard(rect, self.PLAYERS[i], img))
         self.selected_idx = 0
 
-        # 스테이지 카드 생성 (도움말 위치)
         self.stage_panel_rect = pygame.Rect(self.start_x + 3 * (self.card_w + self.gap), self.y_cards, self.card_w, self.card_h)
         stage_defs = [("easy", "쉬움", "보스 HP/속도 낮음"), ("normal", "보통", "현재 스테이지(기존)"), ("hard", "어려움", "보스 2마리 + 강화")]
         self.stage_cards = []
@@ -183,7 +187,6 @@ class StartScene:
             self.stage_cards.append(StageCard(r, key, title, sub))
         self.stage_idx = 1
 
-        # 하단 버튼
         btn_y = HEIGHT - 100
         btn_w, btn_h = 510, 60
         btn_gap = 60
@@ -225,34 +228,23 @@ class StartScene:
         else: surf.fill((18, 18, 24))
 
         mouse = pygame.mouse.get_pos()
-        # 타이틀
-        t_shadow = FONT_TITLE.render("MAGIC SURVIVOR", True, (0, 0, 0))
-        t_main = FONT_TITLE.render("MAGIC SURVIVOR", True, WHITE)
+        t_shadow = pygame.font.SysFont("malgungothic", 64, bold=True).render("MAGIC SURVIVOR", True, (0, 0, 0))
+        t_main = pygame.font.SysFont("malgungothic", 64, bold=True).render("MAGIC SURVIVOR", True, WHITE)
         surf.blit(t_shadow, (82, 74)); surf.blit(t_main, (80, 72))
 
-        # 캐릭터 카드
         for c in self.cards: c.draw(surf, mouse)
-
-        # 스테이지 패널
         draw_rounded_rect(surf, self.stage_panel_rect, (35, 35, 42), radius=18)
         draw_rounded_rect(surf, self.stage_panel_rect, (120, 120, 135), radius=18, width=2)
         surf.blit(FONT_H2.render("스테이지", True, WHITE), (self.stage_panel_rect.x + 18, self.stage_panel_rect.y + 16))
         for sc in self.stage_cards: sc.draw(surf, mouse)
 
-        # 하단 바 디자인 (Game_Start.py 형식 - 삭제)
-        # bar_h = 130
-        # panel = pygame.Surface((WIDTH, bar_h), pygame.SRCALPHA)
-        # panel.fill((0, 0, 0, 80))
-        # surf.blit(panel, (0, HEIGHT - bar_h))
-        # pygame.draw.line(surf, (90, 90, 110), (0, HEIGHT - bar_h), (WIDTH, HEIGHT - bar_h), 2)
-
         self.btn_exit.draw(surf, mouse)
         self.btn_start.draw(surf, mouse)
 
-# -----------------------------
-# Main Loop
-# -----------------------------
 def main():
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Magic Survivor - Start UI")
+    clock = pygame.time.Clock()
     scene = StartScene()
     while True:
         for event in pygame.event.get():
